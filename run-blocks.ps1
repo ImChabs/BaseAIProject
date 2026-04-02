@@ -237,6 +237,8 @@ function Write-BlockManifest {
         [Parameter(Mandatory = $true)]
         [string]$Result,
         [Parameter(Mandatory = $true)]
+        [string]$RunnerResult,
+        [Parameter(Mandatory = $true)]
         [string]$ValidationStatus,
         [Parameter(Mandatory = $true)]
         [int]$ExitCode,
@@ -256,7 +258,7 @@ function Write-BlockManifest {
         detected_reasoning_effort      = $DetectedReasoningEffort
         codex_config_override_requested = $ReasoningConfigOverride
         result                         = $Result
-        runner_result                  = $Result
+        runner_result                  = $RunnerResult
         validation_status              = $ValidationStatus
         exit_code                      = $ExitCode
         jsonl_log_path                 = $LogFile
@@ -381,6 +383,15 @@ function Get-ValidationStatusSummary {
     return 'mixed'
 }
 
+function Test-ValidationStatusAccepted {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$ValidationStatus
+    )
+
+    return $ValidationStatus -in @('passed', 'passed_after_fix')
+}
+
 function Get-RelativePathCompat {
     param(
         [Parameter(Mandatory = $true)]
@@ -474,6 +485,8 @@ function Write-BlockResult {
         [Parameter(Mandatory = $true)]
         [string]$Result,
         [Parameter(Mandatory = $true)]
+        [string]$RunnerResult,
+        [Parameter(Mandatory = $true)]
         [int]$ExitCode,
         [Parameter(Mandatory = $true)]
         [int]$DurationSeconds,
@@ -484,10 +497,10 @@ function Write-BlockResult {
     )
 
     if ($Result -eq 'success') {
-        Write-Host ("[ok] Block {0}/{1} | runner success | validation {2} | duration {3} | effort {4}" -f $BlockIndex, $RequestedBlockCount, $ValidationStatus, (Format-Elapsed -TotalSeconds $DurationSeconds), $DetectedReasoningEffort)
+        Write-Host ("[ok] Block {0}/{1} | runner {2} | validation {3} | duration {4} | effort {5}" -f $BlockIndex, $RequestedBlockCount, $RunnerResult, $ValidationStatus, (Format-Elapsed -TotalSeconds $DurationSeconds), $DetectedReasoningEffort)
     }
     else {
-        Write-Host ("[x] Block {0}/{1} | runner fail | validation {2} | duration {3} | effort {4} | error code {5}" -f $BlockIndex, $RequestedBlockCount, $ValidationStatus, (Format-Elapsed -TotalSeconds $DurationSeconds), $DetectedReasoningEffort, $ExitCode)
+        Write-Host ("[x] Block {0}/{1} | runner {2} | validation {3} | duration {4} | effort {5} | error code {6}" -f $BlockIndex, $RequestedBlockCount, $RunnerResult, $ValidationStatus, (Format-Elapsed -TotalSeconds $DurationSeconds), $DetectedReasoningEffort, $ExitCode)
     }
 }
 
@@ -524,10 +537,7 @@ $repoRoot = Split-Path -Parent $PSCommandPath
 Push-Location $repoRoot
 try {
     $runId = (Get-Date).ToUniversalTime().ToString('yyyyMMddTHHmmssZ')
-    $runManifestFile = ''
-    if ($SaveLogs) {
-        $runManifestFile = Join-Path 'automation-logs' "$runId-manifest.json"
-    }
+    $runManifestFile = Join-Path 'automation-logs' "$runId-manifest.json"
 
     $runSummaryFiles = New-Object System.Collections.Generic.List[string]
     $runValidationStatuses = New-Object System.Collections.Generic.List[string]
@@ -537,14 +547,16 @@ try {
     $handoffPath = 'handoff/next-block.md'
     $validationReportPath = 'handoff/validation-report.md'
 
-    if (-not (Test-Path $handoffPath)) {
-        Write-Error "Stopping safely: $handoffPath does not exist."
-        Write-FinalSummary -RequestedBlockCount $BlockCount -ExecutedBlockCount $executedBlockCount -CompletionStatus $completionStatus -ValidationStatuses $runValidationStatuses.ToArray()
-        exit 1
+    New-Item -ItemType Directory -Force -Path 'automation-logs', 'automation-logs/summaries' | Out-Null
+    if ($SaveLogs) {
+        New-Item -ItemType Directory -Force -Path 'automation-logs/last-messages' | Out-Null
     }
 
-    if ($SaveLogs) {
-        New-Item -ItemType Directory -Force -Path 'automation-logs', 'automation-logs/last-messages', 'automation-logs/summaries' | Out-Null
+    if (-not (Test-Path $handoffPath)) {
+        Write-Error "Stopping safely: $handoffPath does not exist."
+        Write-RunManifest -ManifestFile $runManifestFile -RunId $runId -RequestedBlockCount $BlockCount -CompletionStatus $completionStatus -ValidationStatuses $runValidationStatuses.ToArray() -SummaryFiles $runSummaryFiles.ToArray()
+        Write-FinalSummary -RequestedBlockCount $BlockCount -ExecutedBlockCount $executedBlockCount -CompletionStatus $completionStatus -ValidationStatuses $runValidationStatuses.ToArray() -RunManifestFile $runManifestFile
+        exit 1
     }
 
     if (-not (Test-ArchivePrefixUniqueness -ArchiveDir $archiveDir)) {
@@ -554,9 +566,7 @@ try {
     for ($blockIndex = 1; $blockIndex -le $BlockCount; $blockIndex++) {
         if (-not (Test-Path $handoffPath)) {
             Write-Error "Stopping safely before block ${blockIndex}: $handoffPath does not exist."
-            if ($SaveLogs) {
-                Write-RunManifest -ManifestFile $runManifestFile -RunId $runId -RequestedBlockCount $BlockCount -CompletionStatus $completionStatus -ValidationStatuses $runValidationStatuses.ToArray() -SummaryFiles $runSummaryFiles.ToArray()
-            }
+            Write-RunManifest -ManifestFile $runManifestFile -RunId $runId -RequestedBlockCount $BlockCount -CompletionStatus $completionStatus -ValidationStatuses $runValidationStatuses.ToArray() -SummaryFiles $runSummaryFiles.ToArray()
             Write-FinalSummary -RequestedBlockCount $BlockCount -ExecutedBlockCount $executedBlockCount -CompletionStatus $completionStatus -ValidationStatuses $runValidationStatuses.ToArray() -RunManifestFile $runManifestFile
             exit 1
         }
@@ -571,9 +581,12 @@ try {
         $blockDurationSeconds = 0
         $exitCode = 0
         $result = 'success'
+        $runnerResult = 'success'
         $validationStatus = 'not_recorded'
         $previousArchiveCount = Get-ArchiveFileCount -ArchiveDir $archiveDir
         $previousHighestPrefix = Get-HighestArchivePrefix -ArchiveDir $archiveDir
+        $manifestLogFile = if ($SaveLogs) { $logFile } else { '' }
+        $manifestLastMessageFile = if ($SaveLogs) { $lastMessageFile } else { '' }
 
         $exitCode = Invoke-CodexWithLiveStatus -RepoRoot $repoRoot -ReasoningConfigOverride $reasoningConfigOverride -PersistLogs $SaveLogs.IsPresent -LastMessageFile $lastMessageFile -LogFile $logFile -BlockIndex $blockIndex -RequestedBlockCount $BlockCount -DetectedReasoningEffort $detectedReasoningEffort
         if ($SaveLogs) {
@@ -583,22 +596,20 @@ try {
 
         if ($exitCode -ne 0) {
             $result = 'failure'
+            $runnerResult = 'failure'
             $blockDurationSeconds = [int]((Get-Date) - $blockStart).TotalSeconds
 
+            $timestampUtc = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
+            Write-BlockManifest -BlockManifestFile $summaryFile -BlockIndex $blockIndex -DetectedReasoningEffort $detectedReasoningEffort -ReasoningConfigOverride $reasoningConfigOverride -Result $result -RunnerResult $runnerResult -ValidationStatus $validationStatus -ExitCode $exitCode -LogFile $manifestLogFile -LastMessageFile $manifestLastMessageFile -ValidationReportPath $validationReportPath -TimestampUtc $timestampUtc
+            $runSummaryFiles.Add($summaryFile)
+            $runValidationStatuses.Add($validationStatus)
+            $executedBlockCount = $runSummaryFiles.Count
+            Write-RunManifest -ManifestFile $runManifestFile -RunId $runId -RequestedBlockCount $BlockCount -CompletionStatus $completionStatus -ValidationStatuses $runValidationStatuses.ToArray() -SummaryFiles $runSummaryFiles.ToArray()
             if ($SaveLogs) {
-                $timestampUtc = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
-                Write-BlockManifest -BlockManifestFile $summaryFile -BlockIndex $blockIndex -DetectedReasoningEffort $detectedReasoningEffort -ReasoningConfigOverride $reasoningConfigOverride -Result $result -ValidationStatus $validationStatus -ExitCode $exitCode -LogFile $logFile -LastMessageFile $lastMessageFile -ValidationReportPath $validationReportPath -TimestampUtc $timestampUtc
-                $runSummaryFiles.Add($summaryFile)
-                $runValidationStatuses.Add($validationStatus)
-                $executedBlockCount = $runSummaryFiles.Count
-                Write-RunManifest -ManifestFile $runManifestFile -RunId $runId -RequestedBlockCount $BlockCount -CompletionStatus $completionStatus -ValidationStatuses $runValidationStatuses.ToArray() -SummaryFiles $runSummaryFiles.ToArray()
                 Write-Error "Block $blockIndex failed. Inspect $logFile and $lastMessageFile for details."
             }
-            else {
-                $executedBlockCount = $blockIndex
-            }
 
-            Write-BlockResult -BlockIndex $blockIndex -RequestedBlockCount $BlockCount -Result $result -ExitCode $exitCode -DurationSeconds $blockDurationSeconds -ValidationStatus $validationStatus -DetectedReasoningEffort $detectedReasoningEffort
+            Write-BlockResult -BlockIndex $blockIndex -RequestedBlockCount $BlockCount -Result $result -RunnerResult $runnerResult -ExitCode $exitCode -DurationSeconds $blockDurationSeconds -ValidationStatus $validationStatus -DetectedReasoningEffort $detectedReasoningEffort
             Write-FinalSummary -RequestedBlockCount $BlockCount -ExecutedBlockCount $executedBlockCount -CompletionStatus $completionStatus -ValidationStatuses $runValidationStatuses.ToArray() -RunManifestFile $runManifestFile
             exit 1
         }
@@ -608,41 +619,43 @@ try {
             $result = 'failure'
             $exitCode = 1
 
-            if ($SaveLogs) {
-                $timestampUtc = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
-                Write-BlockManifest -BlockManifestFile $summaryFile -BlockIndex $blockIndex -DetectedReasoningEffort $detectedReasoningEffort -ReasoningConfigOverride $reasoningConfigOverride -Result $result -ValidationStatus $validationStatus -ExitCode $exitCode -LogFile $logFile -LastMessageFile $lastMessageFile -ValidationReportPath $validationReportPath -TimestampUtc $timestampUtc
-                $runSummaryFiles.Add($summaryFile)
-                $runValidationStatuses.Add($validationStatus)
-                $executedBlockCount = $runSummaryFiles.Count
-                Write-RunManifest -ManifestFile $runManifestFile -RunId $runId -RequestedBlockCount $BlockCount -CompletionStatus $completionStatus -ValidationStatuses $runValidationStatuses.ToArray() -SummaryFiles $runSummaryFiles.ToArray()
-            }
-            else {
-                $executedBlockCount = $blockIndex
-            }
+            $timestampUtc = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
+            Write-BlockManifest -BlockManifestFile $summaryFile -BlockIndex $blockIndex -DetectedReasoningEffort $detectedReasoningEffort -ReasoningConfigOverride $reasoningConfigOverride -Result $result -RunnerResult $runnerResult -ValidationStatus $validationStatus -ExitCode $exitCode -LogFile $manifestLogFile -LastMessageFile $manifestLastMessageFile -ValidationReportPath $validationReportPath -TimestampUtc $timestampUtc
+            $runSummaryFiles.Add($summaryFile)
+            $runValidationStatuses.Add($validationStatus)
+            $executedBlockCount = $runSummaryFiles.Count
+            Write-RunManifest -ManifestFile $runManifestFile -RunId $runId -RequestedBlockCount $BlockCount -CompletionStatus $completionStatus -ValidationStatuses $runValidationStatuses.ToArray() -SummaryFiles $runSummaryFiles.ToArray()
 
-            Write-BlockResult -BlockIndex $blockIndex -RequestedBlockCount $BlockCount -Result $result -ExitCode $exitCode -DurationSeconds $blockDurationSeconds -ValidationStatus $validationStatus -DetectedReasoningEffort $detectedReasoningEffort
+            Write-BlockResult -BlockIndex $blockIndex -RequestedBlockCount $BlockCount -Result $result -RunnerResult $runnerResult -ExitCode $exitCode -DurationSeconds $blockDurationSeconds -ValidationStatus $validationStatus -DetectedReasoningEffort $detectedReasoningEffort
             Write-FinalSummary -RequestedBlockCount $BlockCount -ExecutedBlockCount $executedBlockCount -CompletionStatus $completionStatus -ValidationStatuses $runValidationStatuses.ToArray() -RunManifestFile $runManifestFile
             exit 1
         }
 
-        if ($SaveLogs) {
+        if (-not (Test-ValidationStatusAccepted -ValidationStatus $validationStatus)) {
+            $result = 'failure'
+            $exitCode = 1
+            Write-Error "Block $blockIndex failed validation gating: recorded validation status '$validationStatus' is not accepted."
             $timestampUtc = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
-            Write-BlockManifest -BlockManifestFile $summaryFile -BlockIndex $blockIndex -DetectedReasoningEffort $detectedReasoningEffort -ReasoningConfigOverride $reasoningConfigOverride -Result $result -ValidationStatus $validationStatus -ExitCode $exitCode -LogFile $logFile -LastMessageFile $lastMessageFile -ValidationReportPath $validationReportPath -TimestampUtc $timestampUtc
+            Write-BlockManifest -BlockManifestFile $summaryFile -BlockIndex $blockIndex -DetectedReasoningEffort $detectedReasoningEffort -ReasoningConfigOverride $reasoningConfigOverride -Result $result -RunnerResult $runnerResult -ValidationStatus $validationStatus -ExitCode $exitCode -LogFile $manifestLogFile -LastMessageFile $manifestLastMessageFile -ValidationReportPath $validationReportPath -TimestampUtc $timestampUtc
             $runSummaryFiles.Add($summaryFile)
             $runValidationStatuses.Add($validationStatus)
             $executedBlockCount = $runSummaryFiles.Count
-        }
-        else {
-            $executedBlockCount = $blockIndex
+            Write-RunManifest -ManifestFile $runManifestFile -RunId $runId -RequestedBlockCount $BlockCount -CompletionStatus $completionStatus -ValidationStatuses $runValidationStatuses.ToArray() -SummaryFiles $runSummaryFiles.ToArray()
+            Write-BlockResult -BlockIndex $blockIndex -RequestedBlockCount $BlockCount -Result $result -RunnerResult $runnerResult -ExitCode $exitCode -DurationSeconds $blockDurationSeconds -ValidationStatus $validationStatus -DetectedReasoningEffort $detectedReasoningEffort
+            Write-FinalSummary -RequestedBlockCount $BlockCount -ExecutedBlockCount $executedBlockCount -CompletionStatus $completionStatus -ValidationStatuses $runValidationStatuses.ToArray() -RunManifestFile $runManifestFile
+            exit 1
         }
 
-        Write-BlockResult -BlockIndex $blockIndex -RequestedBlockCount $BlockCount -Result $result -ExitCode $exitCode -DurationSeconds $blockDurationSeconds -ValidationStatus $validationStatus -DetectedReasoningEffort $detectedReasoningEffort
+        $timestampUtc = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
+        Write-BlockManifest -BlockManifestFile $summaryFile -BlockIndex $blockIndex -DetectedReasoningEffort $detectedReasoningEffort -ReasoningConfigOverride $reasoningConfigOverride -Result $result -RunnerResult $runnerResult -ValidationStatus $validationStatus -ExitCode $exitCode -LogFile $manifestLogFile -LastMessageFile $manifestLastMessageFile -ValidationReportPath $validationReportPath -TimestampUtc $timestampUtc
+        $runSummaryFiles.Add($summaryFile)
+        $runValidationStatuses.Add($validationStatus)
+        $executedBlockCount = $runSummaryFiles.Count
+        Write-BlockResult -BlockIndex $blockIndex -RequestedBlockCount $BlockCount -Result $result -RunnerResult $runnerResult -ExitCode $exitCode -DurationSeconds $blockDurationSeconds -ValidationStatus $validationStatus -DetectedReasoningEffort $detectedReasoningEffort
     }
 
     $completionStatus = 'completed'
-    if ($SaveLogs) {
-        Write-RunManifest -ManifestFile $runManifestFile -RunId $runId -RequestedBlockCount $BlockCount -CompletionStatus $completionStatus -ValidationStatuses $runValidationStatuses.ToArray() -SummaryFiles $runSummaryFiles.ToArray()
-    }
+    Write-RunManifest -ManifestFile $runManifestFile -RunId $runId -RequestedBlockCount $BlockCount -CompletionStatus $completionStatus -ValidationStatuses $runValidationStatuses.ToArray() -SummaryFiles $runSummaryFiles.ToArray()
 
     Write-FinalSummary -RequestedBlockCount $BlockCount -ExecutedBlockCount $executedBlockCount -CompletionStatus $completionStatus -ValidationStatuses $runValidationStatuses.ToArray() -RunManifestFile $runManifestFile
     exit 0

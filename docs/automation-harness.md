@@ -34,11 +34,12 @@ The harness:
 - uses the repository handoff workflow already in place
 - resolves the reasoning effort for each block from the current `handoff/next-block.md`
 - expects the per-block validation workflow inside those sessions to use the shell-native validation scripts in `scripts/`
+- treats a block as successful only when the recorded validation status is acceptable by default (`passed` or `passed_after_fix`)
 - relies on the installed Codex configuration for approval policy while keeping the compatible `--sandbox workspace-write` override
 - passes `--skip-git-repo-check` so the harness can still be used while the base is not yet inside a Git repository
 - keeps terminal output compact during normal runs
-- keeps runtime artifacts disabled by default for a cleaner working tree
-- enables runtime artifacts only when `--save-logs` or `-SaveLogs` is passed explicitly
+- always writes lightweight summary artifacts under `automation-logs/`
+- enables the verbose JSONL and last-message artifacts only when `--save-logs` or `-SaveLogs` is passed explicitly
 
 ## Validation Environment Alignment
 
@@ -53,6 +54,12 @@ If you run the PowerShell wrapper, the Level 1 validation workflow should use th
 - `.\scripts\validate-unit-tests.ps1`
 
 The compile validation script defaults to `:app:compileDebugKotlin` and also accepts an explicit Gradle task override such as `:app:compileDebugAndroidTestKotlin` when the smallest meaningful verification is an `androidTest` or instrumentation compile target.
+
+## Validation Gating
+
+- Acceptable recorded validation statuses are `passed` and `passed_after_fix`.
+- `failed_unresolved`, `not_recorded`, `mixed`, and `not_run` are treated as harness failures by default.
+- The final block result keeps both the runner outcome and the validation outcome visible in terminal output and summary artifacts.
 
 ## Archive History Guardrail
 
@@ -90,13 +97,14 @@ This harness is aligned to the currently installed `codex exec` surface in this 
 
 ## Runtime Artifacts
 
-By default, the harness does not write per-block runtime artifacts.
+By default, the harness writes only lightweight summary artifacts under `automation-logs/`:
 
-When log saving is enabled, the harness writes artifacts under `automation-logs/`:
 - `automation-logs/<utc-timestamp>-manifest.json` stores a run-level manifest for the full harness invocation
+- `automation-logs/summaries/<utc-timestamp>-block-<n>.json` stores a small per-block run manifest artifact
+
+When log saving is enabled, the harness also writes:
 - `automation-logs/<utc-timestamp>-block-<n>.jsonl` stores the machine-readable Codex event stream for each block when using the Bash runner and the redirected runner log when using the PowerShell runner
 - `automation-logs/last-messages/<utc-timestamp>-block-<n>.md` stores the last assistant message for each block, with repo-local absolute file links relativized when possible
-- `automation-logs/summaries/<utc-timestamp>-block-<n>.json` stores a small per-block run manifest artifact
 
 Each run manifest JSON records:
 - `run_timestamp_utc`
@@ -122,7 +130,9 @@ Each per-block run manifest JSON records:
 
 Compatibility note:
 - `result` and `completion_status` are preserved for compatibility with earlier runs
-- `runner_result` and `runner_completion_status` make it explicit that those fields describe harness execution, not whether repository validation passed
+- `result` reflects the overall per-block harness outcome after archive checks and validation gating
+- `runner_result` preserves whether the underlying `codex exec` invocation itself succeeded
+- `runner_completion_status` remains the run-level compatibility field for the harness completion state
 - `validation_status` and `block_validation_statuses` summarize the statuses recorded in the live `handoff/validation-report.md` when available
 
 ## Terminal Output
@@ -132,7 +142,7 @@ During execution, the harness prints:
   - `[|] Block X/Y | elapsed HH:MM:SS | effort <value>`
 - one final line per finished block:
   - success: `[ok] Block X/Y | runner success | validation <value> | duration HH:MM:SS | effort <value>`
-  - failure: `[x] Block X/Y | runner fail | validation <value> | duration HH:MM:SS | effort <value> | error code <n>`
+  - failure: `[x] Block X/Y | runner <success|fail> | validation <value> | duration HH:MM:SS | effort <value> | error code <n>`
 - one compact run summary line at exit that reports runner status separately from collected validation statuses
 
 The heartbeat is intentionally indeterminate and does not claim percentage completion.
@@ -144,5 +154,5 @@ This first version is intentionally minimal and easy to audit.
 - Only fixed-count execution is supported
 - Run-until-complete is not supported
 - The scripts assume `codex` is already installed, authenticated, and available in the selected shell PATH
-- Validation of block contents remains the responsibility of the per-block Codex execution and the existing repository workflow
+- Validation target selection and in-block fixes remain the responsibility of the per-block Codex execution and the existing repository workflow; the harness only gates on the recorded final validation status
 - PowerShell-saved `.jsonl` logs can still show mojibake for some Unicode punctuation; this remains a known limitation because a safe fix would require a riskier change to process-output capture

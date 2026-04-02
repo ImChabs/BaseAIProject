@@ -16,7 +16,7 @@ Update this section if the repository stack changes in a durable way.
 - `handoff/validation-report.md` is the live validation artifact for the current block when the validation workflow is in use.
 - `handoff-history/` is archival only and should not be treated as the live source of truth unless historical lookup is actually needed.
 - `docs/official-docs.md` is a selective reference index for official framework and library guidance when behavior is uncertain.
-- `.agents/skills/` contains repository-local workflow skills. Treat them as operational guidance, not as a replacement for `AGENTS.md`.
+- `.agents/skills/` contains repository-local workflow skills. Treat them as operational guidance, not as a replacement for `AGENTS.md`. Some stack-specific skills define preferred template defaults for derived projects and apply when that stack or concern is actually in scope.
 - `.codex/` contains optional repository-local agent configuration.
 
 ## Planning Inputs
