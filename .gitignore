@@ -12,8 +12,6 @@
 /captures
 .externalNativeBuild
 .cxx
-local.properties
 /automation-logs/
 .gradle-user-home/
 .android-user-home/
-automation-logs/
