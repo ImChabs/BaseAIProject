@@ -16,3 +16,5 @@
 .gradle-user-home/
 .android-user-home/
 .idea/
+.idea/deploymentTargetSelector.xml
+.idea/inspectionProfiles/Project_Default.xml
