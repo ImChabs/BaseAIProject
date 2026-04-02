@@ -147,10 +147,6 @@ description: Safely customize a derived Android project's shipped identity from 
   - focused search confirming no relevant old package references remain in the editable app scope
 - Also run targeted unit tests when package changes, imports, business logic files, or test files changed.
 - Prefer the repository validation defaults from `AGENTS.md`.
-- For this repository on PowerShell/Windows, the default targeted compile validation is:
-  - `.\scripts\validate-compile.ps1`
-- For unit tests when needed:
-  - `.\scripts\validate-unit-tests.ps1`
 - Do not broaden to full rebuilds unless the requested scope or a concrete failure requires it.
 - If Gradle emits cache or daemon warnings after package moves but the requested validation still passes, report the warning without treating it as a rename failure.
 

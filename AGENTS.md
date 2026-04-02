@@ -35,7 +35,7 @@ Update this section if the repository stack changes in a durable way.
 - Very small projects may keep a simpler structure until the second feature or similar complexity appears.
 
 ## Layer Rules
-- `presentation`: screens, screen roots, viewmodels, UI state, UI actions, UI effects.
+- `presentation`: screens, roots, viewmodels, UI state, UI actions, UI events.
 - `domain`: domain models, use cases, repository contracts, business rules that should stay independent of UI and storage details.
 - `data`: repository implementations, local/remote data sources, DTOs, entities, mappers, persistence integrations.
 - `navigation`: route definitions and navigation wiring when navigation complexity justifies a dedicated area.
@@ -44,25 +44,25 @@ Update this section if the repository stack changes in a durable way.
 - `data` implements `domain` contracts.
 
 ## Screen Conventions
-- If a screen needs a ViewModel, prefer both `FeatureScreen` and `FeatureScreenRoot`.
-- Root naming should follow `FeatureScreenRoot`, not `FeatureRootScreen`.
-- Keep `Screen` and `ScreenRoot` in the same screen file unless the file becomes hard to maintain.
+- If a screen needs a ViewModel or orchestration layer, prefer paired `<Screen>Root` and `<Screen>Screen` composables.
+- Root naming should follow `<Screen>Root`.
+- Keep `Screen` and `Root` in the same screen file unless the file becomes hard to maintain.
 - Typical structure for a complex screen:
   - `FeatureScreen.kt`
   - `FeatureViewModel.kt`
   - `FeatureState.kt`
   - `FeatureAction.kt`
-  - `FeatureEffect.kt`
+  - `FeatureEvent.kt`
 - `State` should usually be a `data class`.
-- `Action` and `Effect` should usually be `sealed interface` types when multiple variants are needed.
+- `Action` and `Event` should usually be `sealed interface` types when multiple variants are needed.
 - Previews belong to the presentational `Screen`.
-- `ScreenRoot` should not have a preview.
+- `Root` should not have a preview.
 - Very simple screens may omit the root when no ViewModel or orchestration layer is needed.
 
 ## State Management
 - Prefer immutable UI state.
 - Use `StateFlow` for long-lived UI state when a ViewModel is present.
-- Use `SharedFlow` or an equivalent one-off event mechanism for transient effects.
+- Use `SharedFlow` or an equivalent one-off event mechanism for transient events.
 - Prefer state hoisting in Compose.
 - Presentational screens should receive state plus explicit callbacks or actions.
 - Keep meaningful business logic out of composables.
