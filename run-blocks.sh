@@ -194,16 +194,18 @@ print_block_result() {
   local block_index=$1
   local block_count=$2
   local result=$3
-  local exit_code=$4
-  local duration_seconds=$5
-  local validation_status=$6
-  local detected_reasoning_effort=$7
-  local token_usage=${8:-}
+  local runner_result=$4
+  local exit_code=$5
+  local duration_seconds=$6
+  local validation_status=$7
+  local detected_reasoning_effort=$8
+  local token_usage=${9:-}
 
   if [[ "$result" == "success" ]]; then
-    printf '[ok] Block %s/%s | runner success | validation %s | duration %s | effort %s' \
+    printf '[ok] Block %s/%s | runner %s | validation %s | duration %s | effort %s' \
       "$block_index" \
       "$block_count" \
+      "$runner_result" \
       "$validation_status" \
       "$(format_elapsed "$duration_seconds")" \
       "$detected_reasoning_effort"
@@ -212,9 +214,10 @@ print_block_result() {
     fi
     printf '\n'
   else
-    printf '[x] Block %s/%s | runner fail | validation %s | duration %s | effort %s | error code %s\n' \
+    printf '[x] Block %s/%s | runner %s | validation %s | duration %s | effort %s | error code %s\n' \
       "$block_index" \
       "$block_count" \
+      "$runner_result" \
       "$validation_status" \
       "$(format_elapsed "$duration_seconds")" \
       "$detected_reasoning_effort" \
@@ -228,12 +231,13 @@ write_block_manifest() {
   local detected_reasoning_effort=$3
   local reasoning_config_override=$4
   local result=$5
-  local validation_status=$6
-  local exit_code=$7
-  local log_file=$8
-  local last_message_file=$9
-  local validation_report_path=${10}
-  local timestamp_utc=${11}
+  local runner_result=$6
+  local validation_status=$7
+  local exit_code=$8
+  local log_file=$9
+  local last_message_file=${10}
+  local validation_report_path=${11}
+  local timestamp_utc=${12}
   local escaped_timestamp_utc
   local escaped_detected_reasoning_effort
   local escaped_reasoning_config_override
@@ -258,7 +262,7 @@ write_block_manifest() {
   printf '  "detected_reasoning_effort": %s,\n' "$escaped_detected_reasoning_effort" >>"$block_manifest_file"
   printf '  "codex_config_override_requested": %s,\n' "$escaped_reasoning_config_override" >>"$block_manifest_file"
   printf '  "result": %s,\n' "$escaped_result" >>"$block_manifest_file"
-  printf '  "runner_result": %s,\n' "$escaped_result" >>"$block_manifest_file"
+  printf '  "runner_result": %s,\n' "$(json_escape "$runner_result")" >>"$block_manifest_file"
   printf '  "validation_status": %s,\n' "$escaped_validation_status" >>"$block_manifest_file"
   printf '  "exit_code": %s,\n' "$exit_code" >>"$block_manifest_file"
   printf '  "jsonl_log_path": %s,\n' "$escaped_log_file" >>"$block_manifest_file"
@@ -409,6 +413,19 @@ summarize_validation_status() {
   fi
 }
 
+validation_status_is_accepted() {
+  local validation_status=$1
+
+  case "$validation_status" in
+    passed|passed_after_fix)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
 sanitize_last_message_links() {
   local last_message_file=$1
   local repo_root=$2
@@ -525,26 +542,25 @@ main() {
 
   local run_id
   run_id=$(date -u +%Y%m%dT%H%M%SZ)
-  local run_manifest_file=""
-  if [[ "$save_logs" == "true" ]]; then
-    run_manifest_file="automation-logs/${run_id}-manifest.json"
-  fi
+  local run_manifest_file="automation-logs/${run_id}-manifest.json"
   local -a run_summary_files=()
   local -a run_validation_statuses=()
   local completion_status="stopped_early"
   local executed_block_count=0
   local archive_dir="handoff-history"
 
+  mkdir -p automation-logs automation-logs/summaries
+  if [[ "$save_logs" == "true" ]]; then
+    mkdir -p automation-logs/last-messages
+  fi
+
   local handoff_path="handoff/next-block.md"
   local validation_report_path="handoff/validation-report.md"
   if [[ ! -f "$handoff_path" ]]; then
     printf 'Stopping safely: %s does not exist.\n' "$handoff_path" >&2
-    print_final_summary "$block_count" "$executed_block_count" "$completion_status" "" ""
+    write_run_manifest "$run_manifest_file" "$run_id" "$block_count" "$completion_status" ""
+    print_final_summary "$block_count" "$executed_block_count" "$completion_status" "" "$run_manifest_file"
     return 1
-  fi
-
-  if [[ "$save_logs" == "true" ]]; then
-    mkdir -p automation-logs automation-logs/last-messages automation-logs/summaries
   fi
 
   validate_archive_prefix_uniqueness "$archive_dir" || return 1
@@ -555,15 +571,13 @@ main() {
       local validation_statuses_csv=""
       validation_statuses_csv=$(IFS=,; printf '%s' "${run_validation_statuses[*]}")
       printf 'Stopping safely before block %s: %s does not exist.\n' "$block_index" "$handoff_path" >&2
-      if [[ "$save_logs" == "true" ]]; then
-        write_run_manifest \
-          "$run_manifest_file" \
-          "$run_id" \
-          "$block_count" \
-          "$completion_status" \
-          "$validation_statuses_csv" \
-          "${run_summary_files[@]}"
-      fi
+      write_run_manifest \
+        "$run_manifest_file" \
+        "$run_id" \
+        "$block_count" \
+        "$completion_status" \
+        "$validation_statuses_csv" \
+        "${run_summary_files[@]}"
       print_final_summary "$block_count" "$executed_block_count" "$completion_status" "$validation_statuses_csv" "$run_manifest_file"
       return 1
     fi
@@ -583,13 +597,20 @@ main() {
     local block_duration_seconds=0
     local exit_code=0
     local result="success"
+    local runner_result="success"
     local validation_status="not_recorded"
     local previous_archive_count=0
     local previous_highest_prefix=0
     local -a loop_statuses=()
+    local manifest_log_file=""
+    local manifest_last_message_file=""
 
     previous_archive_count=$(archive_file_count "$archive_dir")
     previous_highest_prefix=$(highest_archive_prefix "$archive_dir")
+    if [[ "$save_logs" == "true" ]]; then
+      manifest_log_file="$log_file"
+      manifest_last_message_file="$last_message_file"
+    fi
 
     if run_codex_with_live_status \
       "$repo_root" \
@@ -605,6 +626,7 @@ main() {
     else
       exit_code=$?
       result="failure"
+      runner_result="failure"
     fi
 
     if [[ "$save_logs" == "true" ]]; then
@@ -616,39 +638,37 @@ main() {
 
     if [[ "$result" == "failure" ]]; then
       block_duration_seconds=$(($(date +%s) - block_start_epoch))
-      if [[ "$save_logs" == "true" ]]; then
-        timestamp_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-        write_block_manifest \
-          "$summary_file" \
-          "$block_index" \
-          "$detected_reasoning_effort" \
-          "$reasoning_config_override" \
-          "$result" \
-          "$validation_status" \
-          "$exit_code" \
-          "$log_file" \
-          "$last_message_file" \
-          "$validation_report_path" \
-          "$timestamp_utc"
-        run_summary_files+=("$summary_file")
-        run_validation_statuses+=("$validation_status")
-        executed_block_count=${#run_summary_files[@]}
-        local validation_statuses_csv=""
-        validation_statuses_csv=$(IFS=,; printf '%s' "${run_validation_statuses[*]}")
-        write_run_manifest \
-          "$run_manifest_file" \
-          "$run_id" \
-          "$block_count" \
-          "$completion_status" \
-          "$validation_statuses_csv" \
-          "${run_summary_files[@]}"
-      else
-        executed_block_count=$block_index
-      fi
+      timestamp_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+      write_block_manifest \
+        "$summary_file" \
+        "$block_index" \
+        "$detected_reasoning_effort" \
+        "$reasoning_config_override" \
+        "$result" \
+        "$runner_result" \
+        "$validation_status" \
+        "$exit_code" \
+        "$manifest_log_file" \
+        "$manifest_last_message_file" \
+        "$validation_report_path" \
+        "$timestamp_utc"
+      run_summary_files+=("$summary_file")
+      run_validation_statuses+=("$validation_status")
+      executed_block_count=${#run_summary_files[@]}
+      local validation_statuses_csv=""
+      validation_statuses_csv=$(IFS=,; printf '%s' "${run_validation_statuses[*]}")
+      write_run_manifest \
+        "$run_manifest_file" \
+        "$run_id" \
+        "$block_count" \
+        "$completion_status" \
+        "$validation_statuses_csv" \
+        "${run_summary_files[@]}"
       print_block_result \
         "$block_index" \
         "$block_count" \
         "$result" \
+        "$runner_result" \
         "$exit_code" \
         "$block_duration_seconds" \
         "$validation_status" \
@@ -666,39 +686,37 @@ main() {
     if ! validate_archive_progress "$archive_dir" "$previous_archive_count" "$previous_highest_prefix"; then
       result="failure"
       exit_code=1
-      if [[ "$save_logs" == "true" ]]; then
-        timestamp_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-        write_block_manifest \
-          "$summary_file" \
-          "$block_index" \
-          "$detected_reasoning_effort" \
-          "$reasoning_config_override" \
-          "$result" \
-          "$validation_status" \
-          "$exit_code" \
-          "$log_file" \
-          "$last_message_file" \
-          "$validation_report_path" \
-          "$timestamp_utc"
-        run_summary_files+=("$summary_file")
-        run_validation_statuses+=("$validation_status")
-        executed_block_count=${#run_summary_files[@]}
-        local validation_statuses_csv=""
-        validation_statuses_csv=$(IFS=,; printf '%s' "${run_validation_statuses[*]}")
-        write_run_manifest \
-          "$run_manifest_file" \
-          "$run_id" \
-          "$block_count" \
-          "$completion_status" \
-          "$validation_statuses_csv" \
-          "${run_summary_files[@]}"
-      else
-        executed_block_count=$block_index
-      fi
+      timestamp_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+      write_block_manifest \
+        "$summary_file" \
+        "$block_index" \
+        "$detected_reasoning_effort" \
+        "$reasoning_config_override" \
+        "$result" \
+        "$runner_result" \
+        "$validation_status" \
+        "$exit_code" \
+        "$manifest_log_file" \
+        "$manifest_last_message_file" \
+        "$validation_report_path" \
+        "$timestamp_utc"
+      run_summary_files+=("$summary_file")
+      run_validation_statuses+=("$validation_status")
+      executed_block_count=${#run_summary_files[@]}
+      local validation_statuses_csv=""
+      validation_statuses_csv=$(IFS=,; printf '%s' "${run_validation_statuses[*]}")
+      write_run_manifest \
+        "$run_manifest_file" \
+        "$run_id" \
+        "$block_count" \
+        "$completion_status" \
+        "$validation_statuses_csv" \
+        "${run_summary_files[@]}"
       print_block_result \
         "$block_index" \
         "$block_count" \
         "$result" \
+        "$runner_result" \
         "$exit_code" \
         "$block_duration_seconds" \
         "$validation_status" \
@@ -709,7 +727,10 @@ main() {
       return 1
     fi
 
-    if [[ "$save_logs" == "true" ]]; then
+    if ! validation_status_is_accepted "$validation_status"; then
+      result="failure"
+      exit_code=1
+      printf "Block %s failed validation gating: recorded validation status '%s' is not accepted.\n" "$block_index" "$validation_status" >&2
       timestamp_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)
       write_block_manifest \
         "$summary_file" \
@@ -717,22 +738,60 @@ main() {
         "$detected_reasoning_effort" \
         "$reasoning_config_override" \
         "$result" \
+        "$runner_result" \
         "$validation_status" \
         "$exit_code" \
-        "$log_file" \
-        "$last_message_file" \
+        "$manifest_log_file" \
+        "$manifest_last_message_file" \
         "$validation_report_path" \
         "$timestamp_utc"
       run_summary_files+=("$summary_file")
       run_validation_statuses+=("$validation_status")
       executed_block_count=${#run_summary_files[@]}
-    else
-      executed_block_count=$block_index
+      local validation_statuses_csv=""
+      validation_statuses_csv=$(IFS=,; printf '%s' "${run_validation_statuses[*]}")
+      write_run_manifest \
+        "$run_manifest_file" \
+        "$run_id" \
+        "$block_count" \
+        "$completion_status" \
+        "$validation_statuses_csv" \
+        "${run_summary_files[@]}"
+      print_block_result \
+        "$block_index" \
+        "$block_count" \
+        "$result" \
+        "$runner_result" \
+        "$exit_code" \
+        "$block_duration_seconds" \
+        "$validation_status" \
+        "$detected_reasoning_effort"
+      print_final_summary "$block_count" "$executed_block_count" "$completion_status" "$validation_statuses_csv" "$run_manifest_file"
+      return 1
     fi
+
+    timestamp_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+    write_block_manifest \
+      "$summary_file" \
+      "$block_index" \
+      "$detected_reasoning_effort" \
+      "$reasoning_config_override" \
+      "$result" \
+      "$runner_result" \
+      "$validation_status" \
+      "$exit_code" \
+      "$manifest_log_file" \
+      "$manifest_last_message_file" \
+      "$validation_report_path" \
+      "$timestamp_utc"
+    run_summary_files+=("$summary_file")
+    run_validation_statuses+=("$validation_status")
+    executed_block_count=${#run_summary_files[@]}
     print_block_result \
       "$block_index" \
       "$block_count" \
       "$result" \
+      "$runner_result" \
       "$exit_code" \
       "$block_duration_seconds" \
       "$validation_status" \
@@ -740,19 +799,15 @@ main() {
   done
 
   completion_status="completed"
-  if [[ "$save_logs" == "true" ]]; then
-    local validation_statuses_csv=""
-    validation_statuses_csv=$(IFS=,; printf '%s' "${run_validation_statuses[*]}")
-    write_run_manifest \
-      "$run_manifest_file" \
-      "$run_id" \
-      "$block_count" \
-      "$completion_status" \
-      "$validation_statuses_csv" \
-      "${run_summary_files[@]}"
-  fi
   local validation_statuses_csv=""
   validation_statuses_csv=$(IFS=,; printf '%s' "${run_validation_statuses[*]}")
+  write_run_manifest \
+    "$run_manifest_file" \
+    "$run_id" \
+    "$block_count" \
+    "$completion_status" \
+    "$validation_statuses_csv" \
+    "${run_summary_files[@]}"
   print_final_summary "$block_count" "$executed_block_count" "$completion_status" "$validation_statuses_csv" "$run_manifest_file"
 }
 

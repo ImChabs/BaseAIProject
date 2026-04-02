@@ -20,17 +20,10 @@ description: Run the smallest meaningful validation for the current block, fix i
 
 ## Validation Targets
 
-- Use the repo-local compile validation script that matches the current shell:
-  - PowerShell/Windows: `.\scripts\validate-compile.ps1`
-  - WSL/Bash: `bash scripts/validate-compile.sh`
-  - Default underlying task: `:app:compileDebugKotlin`
-  - Default for presentation, navigation, resource, and general Kotlin compile verification.
-  - When the changed scope is limited to `androidTest` or instrumentation or Compose UI test sources, use the same compile validation script with `:app:compileDebugAndroidTestKotlin`.
-- Use the repo-local unit-test validation script that matches the current shell:
-  - PowerShell/Windows: `.\scripts\validate-unit-tests.ps1`
-  - WSL/Bash: `bash scripts/validate-unit-tests.sh`
-  - Underlying task: `:app:testDebugUnitTest`
-  - Use when domain or data logic changes or when adding or updating unit tests.
+- Use the repository validation defaults from `AGENTS.md` for shell-specific commands and default Gradle tasks.
+- Use the default compile validation target for presentation, navigation, resource, and general Kotlin compile verification.
+- When the changed scope is limited to `androidTest` or instrumentation or Compose UI test sources, use the same compile validation script with the `androidTest` compile override defined by `AGENTS.md`.
+- Use the default unit-test validation target from `AGENTS.md` when domain or data logic changes or when adding or updating unit tests.
 - Run one validation target per loop.
 - If the changed scope genuinely needs both targets, finish the compile loop first and then start a separate unit-test loop.
 - Keep selection explicit. Do not introduce broader validation unless the block clearly warrants it.
