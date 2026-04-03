@@ -33,6 +33,7 @@ The harness:
 - starts a fresh `codex exec` session for every block
 - uses the repository handoff workflow already in place
 - resolves the reasoning effort for each block from the current `handoff/next-block.md`
+- leaves any `Recommended execution mode` value in the handoff as advisory metadata unless the runners are extended to consume it
 - expects the per-block validation workflow inside those sessions to use the shell-native validation scripts in `scripts/`
 - treats a block as successful only when the recorded validation status is acceptable by default (`passed` or `passed_after_fix`)
 - relies on the installed Codex configuration for approval policy while keeping the compatible `--sandbox workspace-write` override
@@ -71,9 +72,17 @@ The harness checks `handoff-history/` before the run starts and after every succ
 
 ## Reasoning Effort Resolution
 
-For each block, the script reads the live handoff source of truth at `handoff/next-block.md` and looks for the repository convention:
+For each block, the script reads the live handoff source of truth at `handoff/next-block.md`.
+
+The current runners only consume this repository convention:
 
 `- Recommended reasoning effort: <value>`
+
+If the handoff also includes:
+
+`- Recommended execution mode: <plan_first|direct>`
+
+that value is preserved as handoff guidance for humans or future workflow extensions, but the current runners do not parse or enforce it.
 
 Resolution behavior:
 - `low`, `medium`, and `high` are passed through directly to Codex CLI as `model_reasoning_effort`
@@ -155,4 +164,5 @@ This first version is intentionally minimal and easy to audit.
 - Run-until-complete is not supported
 - The scripts assume `codex` is already installed, authenticated, and available in the selected shell PATH
 - Validation target selection and in-block fixes remain the responsibility of the per-block Codex execution and the existing repository workflow; the harness only gates on the recorded final validation status
+- Execution-mode recommendations in the handoff are currently advisory only and do not change runner behavior
 - PowerShell-saved `.jsonl` logs can still show mojibake for some Unicode punctuation; this remains a known limitation because a safe fix would require a riskier change to process-output capture

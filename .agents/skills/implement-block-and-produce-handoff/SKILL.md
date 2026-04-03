@@ -52,6 +52,7 @@ description: Implement one bounded development block in this repository, verify 
 - Always create or overwrite `handoff/next-block.md`.
 - Keep it short, specific, and actionable.
 - Include an `Execution Recommendation` section in every generated handoff.
+- Treat the skill-defined handoff structure here as the source of truth for generated next-block handoffs.
 - Include:
   - `Next block name`
   - `Objective`
@@ -62,6 +63,7 @@ description: Implement one bounded development block in this repository, verify 
 - Format the execution recommendation as:
   - `## Execution Recommendation`
   - `- Recommended reasoning effort: <low|medium|high|xhigh>`
+  - `- Recommended execution mode: <plan_first|direct>`
   - `- Rationale: <brief explanation>`
 - Base the next block on the current state of the codebase after your changes, not on the original request.
 
@@ -83,9 +85,15 @@ description: Implement one bounded development block in this repository, verify 
   - `xhigh`
 - Choose the recommendation by evaluating the expected complexity of the next block.
 - Use the rubric below as guidance, not as a rigid formula.
+- Allowed execution mode values are exactly:
+  - `plan_first`
+  - `direct`
 - Always include a brief one-line rationale.
 - Decision rubric:
   - `low`: small, mechanical, low-risk work
   - `medium`: default for normal implementation blocks
   - `high`: meaningful ambiguity, multi-layer coordination, or harder verification
   - `xhigh`: hardest cases with deep coordination, difficult debugging, or major tradeoffs
+- Execution mode rubric:
+  - `plan_first`: use when the next block has meaningful ambiguity, competing implementations, or needs repo inspection before editing
+  - `direct`: use when the next block is already specific, bounded, and ready for implementation

@@ -31,4 +31,5 @@ Done criteria
 
 ## Execution Recommendation
 - Recommended reasoning effort: low
+- Recommended execution mode: direct
 - Rationale: The next block is a small presentation-file extraction with straightforward compile-only verification.

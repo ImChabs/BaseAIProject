@@ -85,6 +85,7 @@ Update this section if the repository stack changes in a durable way.
 - When the repository is operating in block mode, complete exactly one coherent block per chat or execution unless the user explicitly asks for something else.
 - Keep the live handoff concise, specific, and actionable.
 - Treat `handoff/next-block.md` as the live next step and `handoff-history/` as append-only history.
+- Next-block handoffs must include an `Execution Recommendation` section with both `Recommended reasoning effort` and `Recommended execution mode` guidance.
 - Keep `handoff/validation-report.md` aligned with what was actually validated.
 
 ## Verification And Testing

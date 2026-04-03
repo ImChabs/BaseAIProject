@@ -106,6 +106,7 @@ This repository supports small block-based execution with live handoff files.
 Key rules:
 
 - `handoff/next-block.md` is the live source of truth for the immediate next block.
+- The handoff includes an `Execution Recommendation` section with both reasoning-effort guidance and execution-mode guidance for the next block.
 - `handoff/validation-report.md` is the live validation artifact for the current block.
 - `handoff-history/` is append-only archive history.
 - Blocks should stay narrow, coherent, and reviewable.
@@ -139,6 +140,8 @@ Those wrappers are documented in `docs/automation-harness.md`. They rely on the 
 ## Skills And Template Guidance
 
 The skills under `.agents/skills/` are operational guidance, not proof that every described technology is already installed in the app.
+
+The exact generated next-block handoff structure is defined by `.agents/skills/implement-block-and-produce-handoff/SKILL.md`.
 
 Some skills describe preferred defaults for future derived projects, including:
 
