@@ -9,6 +9,7 @@ description: Implement one bounded development block in this repository, verify 
 
 - Complete exactly one development block per chat or thread.
 - Implement only the requested scope, plus small adjacent fixes required to make the block correct and verifiable.
+- Keep phases bounded by re-slicing before one phase slice grows past a reviewable block budget.
 - Leave a concise handoff for the next block at `handoff/next-block.md`.
 - Archive each completed handoff as a separate history file under `handoff-history/`.
 
@@ -23,19 +24,30 @@ description: Implement one bounded development block in this repository, verify 
 
 1. Read `AGENTS.md`.
 2. Read the current user request, `docs/blueprint.md` if it exists, and `handoff/next-block.md` if it exists.
-3. Define the exact block scope before editing:
+3. Identify the active phase slice before editing.
+   - Use the current handoff when it already includes explicit phase context.
+   - Otherwise infer the active phase conservatively from `docs/blueprint.md`, the current request, and the immediate handoff scope.
+   - Treat phase-budget counting as phase-local context, not as the repo-wide block number or the archive prefix.
+4. Define the exact block scope before editing:
    - What must change
    - What can stay untouched
    - What adjacent fix is acceptable only if required to complete the block correctly
-4. Implement the block.
-5. Verify the smallest meaningful affected scope using the repository rules in `AGENTS.md`.
+5. Implement the block.
+6. Verify the smallest meaningful affected scope using the repository rules in `AGENTS.md`.
    - If `.agents/skills/validate-fix-loop/SKILL.md` exists, follow it for the validation/fix loop and update `handoff/validation-report.md`.
-6. If verification fails because of block changes, fix issues that remain in scope or are a small required adjacent correction.
+7. If verification fails because of block changes, fix issues that remain in scope or are a small required adjacent correction.
    - Rerun the same validation target within the loop limit instead of broadening verification immediately.
-7. Summarize the result clearly.
-8. Overwrite `handoff/next-block.md` with the next-block handoff.
-9. Write a second archival copy of that same handoff into `handoff-history/` as a new file without overwriting prior history files.
-10. Treat the archive step as incomplete unless it creates exactly one new `handoff-history/` file whose numeric prefix is unique and is the next value after the current highest prefix.
+8. Summarize the result clearly.
+9. Check the active phase slice before generating the next handoff.
+   - Target roughly 4 to 8 implementation blocks per phase slice.
+   - Never continue the same phase slice past 10 implementation blocks without an explicit re-slice.
+   - If the remaining scope is likely to exceed that cap, do not keep splitting indefinitely.
+   - Merge adjacent low-risk work only when the merged next block is still reviewable and independently verifiable.
+   - Otherwise, make the next handoff the first block of a new phase slice and state that re-slice explicitly.
+   - Never generate block 11 for an unchanged phase slice.
+10. Overwrite `handoff/next-block.md` with the next-block handoff.
+11. Write a second archival copy of that same handoff into `handoff-history/` as a new file without overwriting prior history files.
+12. Treat the archive step as incomplete unless it creates exactly one new `handoff-history/` file whose numeric prefix is unique and is the next value after the current highest prefix.
 
 ## Verification
 
@@ -51,9 +63,14 @@ description: Implement one bounded development block in this repository, verify 
 - Create the `handoff-history` directory first if it does not already exist.
 - Always create or overwrite `handoff/next-block.md`.
 - Keep it short, specific, and actionable.
+- Include a `Phase Context` section in every generated handoff.
 - Include an `Execution Recommendation` section in every generated handoff.
 - Treat the skill-defined handoff structure here as the source of truth for generated next-block handoffs.
 - Include:
+  - `Phase Context`
+    - `Active phase`
+    - `Phase objective`
+    - `Phase slice status`
   - `Next block name`
   - `Objective`
   - `Relevant files`
@@ -65,6 +82,7 @@ description: Implement one bounded development block in this repository, verify 
   - `- Recommended reasoning effort: <low|medium|high|xhigh>`
   - `- Recommended execution mode: <plan_first|direct>`
   - `- Rationale: <brief explanation>`
+- When older handoffs do not include explicit phase context, infer it once from the current repo direction and then add it to the newly generated handoff.
 - Base the next block on the current state of the codebase after your changes, not on the original request.
 
 ## Archive Rule

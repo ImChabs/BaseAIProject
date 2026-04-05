@@ -83,6 +83,13 @@ Update this section if the repository stack changes in a durable way.
 
 ## Block Workflow Expectations
 - When the repository is operating in block mode, complete exactly one coherent block per chat or execution unless the user explicitly asks for something else.
+- A block should be one coherent, reviewable, independently verifiable unit of work with one primary objective and the smallest meaningful validation for that scope.
+- Treat phases as bounded planning slices rather than open-ended buckets.
+- Target roughly 4 to 8 implementation blocks for one phase slice.
+- A single phase slice must not continue past 10 implementation blocks without an explicit phase re-slice.
+- If the remaining scope is likely to exceed 10 blocks, re-plan before continuing:
+  - merge adjacent low-risk blocks only when the merged result is still reviewable and independently verifiable
+  - otherwise split the remaining scope into a new phase slice
 - Keep the live handoff concise, specific, and actionable.
 - Treat `handoff/next-block.md` as the live next step and `handoff-history/` as append-only history.
 - Next-block handoffs must include an `Execution Recommendation` section with both `Recommended reasoning effort` and `Recommended execution mode` guidance.

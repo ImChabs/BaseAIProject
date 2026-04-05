@@ -74,6 +74,12 @@ The first meaningful version of this repository instance should include:
 
 Implementation should happen in small blocks. For the current phase, each block should primarily improve confidence in the reusable workflow layer, not expand the app into a real product.
 
+Treat roadmap phases as bounded slices, not indefinite buckets:
+- plan each phase for roughly 4 to 8 implementation blocks
+- do not let one phase slice continue past 10 blocks without an explicit re-slice
+- if a phase is likely to exceed that cap, either merge adjacent low-risk work only when the result stays reviewable and independently verifiable, or split the remaining scope into a new phase
+- keep detailed block sequencing in `handoff/next-block.md` and archived handoffs, not in this blueprint
+
 This blueprint provides persistent direction across multiple block-based chats:
 - `handoff/next-block.md` defines the immediate next block
 - this blueprint defines the broader destination and boundaries

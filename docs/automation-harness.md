@@ -34,6 +34,7 @@ The harness:
 - uses the repository handoff workflow already in place
 - resolves the reasoning effort for each block from the current `handoff/next-block.md`
 - leaves any `Recommended execution mode` value in the handoff as advisory metadata unless the runners are extended to consume it
+- leaves any phase-slice context in the handoff as human guidance unless the runners are extended to consume it
 - expects the per-block validation workflow inside those sessions to use the shell-native validation scripts in `scripts/`
 - treats a block as successful only when the recorded validation status is acceptable by default (`passed` or `passed_after_fix`)
 - relies on the installed Codex configuration for approval policy while keeping the compatible `--sandbox workspace-write` override
@@ -165,4 +166,6 @@ This first version is intentionally minimal and easy to audit.
 - The scripts assume `codex` is already installed, authenticated, and available in the selected shell PATH
 - Validation target selection and in-block fixes remain the responsibility of the per-block Codex execution and the existing repository workflow; the harness only gates on the recorded final validation status
 - Execution-mode recommendations in the handoff are currently advisory only and do not change runner behavior
+- Phase-slice budgeting is currently enforced by repository guidance and handoff generation, not by runner-side parsing or hard stops
+- If a current phase slice is approaching its cap, choose a requested block count that stays within that slice and stop for an explicit re-slice before continuing the same phase past block 10
 - PowerShell-saved `.jsonl` logs can still show mojibake for some Unicode punctuation; this remains a known limitation because a safe fix would require a riskier change to process-output capture

@@ -109,7 +109,9 @@ Key rules:
 - The handoff includes an `Execution Recommendation` section with both reasoning-effort guidance and execution-mode guidance for the next block.
 - `handoff/validation-report.md` is the live validation artifact for the current block.
 - `handoff-history/` is append-only archive history.
-- Blocks should stay narrow, coherent, and reviewable.
+- Blocks should stay narrow, coherent, reviewable, and independently verifiable.
+- Treat phases as bounded slices: target roughly 4 to 8 blocks and re-slice explicitly before one phase would continue past 10 blocks.
+- If a phase is likely to exceed that cap, either merge adjacent low-risk work only when the merged block stays reviewable and independently verifiable, or split the remaining scope into a new phase.
 
 The repo also includes optional wrappers for running a fixed number of sequential Codex blocks:
 
@@ -121,7 +123,7 @@ The repo also includes optional wrappers for running a fixed number of sequentia
 ./run-blocks.sh 3
 ```
 
-Those wrappers are documented in `docs/automation-harness.md`. They rely on the same handoff files and validation discipline already used in the repository.
+Those wrappers are documented in `docs/automation-harness.md`. They rely on the same handoff files and validation discipline already used in the repository, but the current runners do not enforce phase caps automatically.
 
 ## Key Files And Directories
 
