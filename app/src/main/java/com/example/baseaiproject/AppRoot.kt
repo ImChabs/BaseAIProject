@@ -49,6 +49,8 @@ sealed interface SessionSecurityAction {
 
     data object StartRefresh : SessionSecurityAction
 
+    data object BlockRefreshForConnectivity : SessionSecurityAction
+
     data object CompleteRefresh : SessionSecurityAction
 
     data object FailRefresh : SessionSecurityAction
@@ -69,6 +71,10 @@ enum class ProtectedSessionLifecycle(
     Refreshing(
         title = "Refresh in progress",
         description = "A placeholder refresh attempt is recovering the session before either success or forced logout."
+    ),
+    RefreshBlockedByConnectivity(
+        title = "Refresh blocked by connectivity",
+        description = "The session stays authenticated, but refresh recovery is paused until connectivity returns."
     ),
     Unrecoverable(
         title = "Session no longer recoverable",
@@ -187,6 +193,19 @@ private fun AppRootSessionSecurityPreview() {
     BaseAiProjectTheme {
         AppRoot(
             authState = AppAuthState.Authenticated(ProtectedSessionLifecycle.AccessExpired),
+            authenticatedDestination = AuthenticatedDestination.SessionSecurity
+        )
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+private fun AppRootRefreshConnectivityPreview() {
+    BaseAiProjectTheme {
+        AppRoot(
+            authState = AppAuthState.Authenticated(
+                ProtectedSessionLifecycle.RefreshBlockedByConnectivity
+            ),
             authenticatedDestination = AuthenticatedDestination.SessionSecurity
         )
     }

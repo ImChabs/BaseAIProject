@@ -67,8 +67,20 @@ fun SessionSecurityScreen(
                     Button(onClick = { onAction(SessionSecurityAction.CompleteRefresh) }) {
                         Text(text = "Refresh succeeded")
                     }
+                    Button(onClick = { onAction(SessionSecurityAction.BlockRefreshForConnectivity) }) {
+                        Text(text = "Connectivity blocked refresh")
+                    }
                     Button(onClick = { onAction(SessionSecurityAction.FailRefresh) }) {
                         Text(text = "Refresh failed and sign out")
+                    }
+                }
+
+                ProtectedSessionLifecycle.RefreshBlockedByConnectivity -> {
+                    Button(onClick = { onAction(SessionSecurityAction.StartRefresh) }) {
+                        Text(text = "Retry refresh attempt")
+                    }
+                    Button(onClick = { onAction(SessionSecurityAction.MarkAccessExpired) }) {
+                        Text(text = "Return to expired access")
                     }
                 }
 
@@ -96,7 +108,7 @@ fun SessionSecurityScreen(
 private fun SessionSecurityScreenPreview() {
     BaseAiProjectTheme {
         SessionSecurityScreen(
-            sessionLifecycle = ProtectedSessionLifecycle.Refreshing
+            sessionLifecycle = ProtectedSessionLifecycle.RefreshBlockedByConnectivity
         )
     }
 }

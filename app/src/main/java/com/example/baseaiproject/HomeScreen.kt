@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Button
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -30,7 +31,14 @@ fun HomeScreen(
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Text(text = formatGreeting("Android"))
-            Text(text = sessionLifecycle.title)
+            Text(
+                text = sessionLifecycle.title,
+                style = MaterialTheme.typography.titleMedium
+            )
+            Text(
+                text = sessionLifecycle.description,
+                style = MaterialTheme.typography.bodyMedium
+            )
             Button(onClick = onLogout) {
                 Text(text = "Log out")
             }

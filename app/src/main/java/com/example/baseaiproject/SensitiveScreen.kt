@@ -40,6 +40,10 @@ fun SensitiveScreen(
             )
             Text(
                 text = sessionLifecycle.title,
+                style = MaterialTheme.typography.titleMedium
+            )
+            Text(
+                text = sessionLifecycle.description,
                 style = MaterialTheme.typography.bodyMedium
             )
             Button(onClick = onLogout) {

@@ -84,6 +84,12 @@ class MainActivity : ComponentActivity() {
                                 updateAuthenticatedSessionLifecycle(ProtectedSessionLifecycle.Refreshing)
                             }
 
+                            SessionSecurityAction.BlockRefreshForConnectivity -> {
+                                updateAuthenticatedSessionLifecycle(
+                                    ProtectedSessionLifecycle.RefreshBlockedByConnectivity
+                                )
+                            }
+
                             SessionSecurityAction.CompleteRefresh -> {
                                 updateAuthenticatedSessionLifecycle(ProtectedSessionLifecycle.Active)
                             }
